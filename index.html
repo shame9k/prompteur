@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Prompteur">
+<meta name="theme-color" content="#0b0b0f">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Prompteur</title>
+<style>
+:root{
+  --bg:#0b0b0f; --surface:#17171d; --surface-2:#22222a; --line:#2e2e38;
+  --text:#f4f4f6; --muted:#9a9aa6; --accent:#ff3b30; --accent-2:#0a84ff;
+  --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
+  --safe-l:env(safe-area-inset-left); --safe-r:env(safe-area-inset-right);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+  overscroll-behavior:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+input,textarea{font:inherit;color:inherit}
+.screen{position:fixed;inset:0;display:none;flex-direction:column}
+.screen.active{display:flex}
+
+/* ---------- Accueil ---------- */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(var(--safe-t) + 12px) calc(var(--safe-r) + 16px) 12px calc(var(--safe-l) + 16px)}
+.topbar h1{margin:0;font-size:28px;font-weight:700;letter-spacing:-.02em}
+.pill{background:var(--accent-2);color:#fff;padding:9px 16px;border-radius:999px;font-weight:600}
+.pill.ghost{background:var(--surface-2);color:var(--text)}
+.pill.red{background:var(--accent)}
+.list{flex:1;overflow:auto;padding:4px calc(var(--safe-r) + 16px) calc(var(--safe-b) + 24px) calc(var(--safe-l) + 16px);
+  -webkit-overflow-scrolling:touch}
+.card{display:block;width:100%;text-align:left;background:var(--surface);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+.card b{display:block;font-size:17px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--muted);font-size:14px}
+.card small{display:block;color:var(--muted);font-size:12px;margin-top:6px}
+.empty{color:var(--muted);text-align:center;margin-top:20vh;padding:0 24px}
+
+/* ---------- Éditeur ---------- */
+.editor-body{flex:1;display:flex;flex-direction:column;gap:10px;
+  padding:0 calc(var(--safe-r) + 16px) 12px calc(var(--safe-l) + 16px);min-height:0}
+#title{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:17px;font-weight:600;outline:none}
+#body{flex:1;min-height:0;resize:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;font-size:17px;line-height:1.5;outline:none}
+.editor-foot{display:flex;gap:10px;justify-content:space-between;align-items:center;
+  padding:0 calc(var(--safe-r) + 16px) calc(var(--safe-b) + 14px) calc(var(--safe-l) + 16px)}
+.editor-foot .meta{color:var(--muted);font-size:13px}
+.danger{color:var(--accent);padding:9px 4px}
+
+/* ---------- Studio ---------- */
+#studio{background:#000;overflow:hidden}
+#cam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#cam.mirror{transform:scaleX(-1)}
+#panel{position:absolute;left:0;right:0;top:0;overflow:hidden;touch-action:none;
+  padding-top:var(--safe-t);
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 12%,#000 82%,transparent 100%);
+          mask-image:linear-gradient(to bottom,transparent 0,#000 12%,#000 82%,transparent 100%)}
+#panelBg{position:absolute;left:0;right:0;top:0;pointer-events:none}
+#scroller{position:absolute;left:0;right:0;top:0;will-change:transform;
+  padding:0 calc(var(--safe-r) + 22px) 0 calc(var(--safe-l) + 22px);
+  white-space:pre-wrap;word-wrap:break-word;text-align:center;font-weight:600;line-height:1.35;
+  text-shadow:0 1px 3px rgba(0,0,0,.6)}
+#scroller.flip{transform-origin:center}
+#guide{position:absolute;left:calc(var(--safe-l) + 4px);width:0;height:0;pointer-events:none;
+  border-top:9px solid transparent;border-bottom:9px solid transparent;border-left:12px solid var(--accent);opacity:.9}
+#hud{position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(var(--safe-b) + 128px);display:none;align-items:center;gap:8px;
+  background:rgba(0,0,0,.55);padding:6px 12px;border-radius:999px;font-variant-numeric:tabular-nums;font-weight:600}
+#hud.on{display:flex}
+#hud i{width:10px;height:10px;border-radius:50%;background:var(--accent);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+.bar{position:absolute;left:0;right:0;bottom:0;
+  padding:14px calc(var(--safe-r) + 16px) calc(var(--safe-b) + 14px) calc(var(--safe-l) + 16px);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:linear-gradient(to top,rgba(0,0,0,.7),rgba(0,0,0,0))}
+.ctl{width:48px;height:48px;border-radius:50%;background:rgba(40,40,48,.75);display:grid;place-items:center;font-size:20px;font-weight:700;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.ctl:disabled{opacity:.35}
+.ctl svg{width:22px;height:22px;fill:currentColor}
+.speed{display:flex;flex-direction:column;align-items:center;min-width:40px;font-variant-numeric:tabular-nums}
+.speed b{font-size:18px}.speed small{font-size:11px;color:var(--muted)}
+#rec{width:74px;height:74px;border-radius:50%;border:4px solid #fff;display:grid;place-items:center;background:transparent}
+#rec span{width:56px;height:56px;border-radius:50%;background:var(--accent);transition:all .2s}
+#rec.on span{width:28px;height:28px;border-radius:7px}
+.group{display:flex;align-items:center;gap:8px}
+#studio.recording .hide-rec{visibility:hidden}
+
+/* Feuilles (réglages / revue) */
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:20;background:rgba(23,23,29,.97);
+  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  border-radius:20px 20px 0 0;padding:10px calc(var(--safe-r) + 20px) calc(var(--safe-b) + 18px) calc(var(--safe-l) + 20px);
+  transform:translateY(105%);transition:transform .25s ease;max-height:85%;overflow:auto}
+.sheet.open{transform:none}
+.grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+.sheet h2{font-size:17px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+.row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row label{flex:0 0 auto}
+.row output{color:var(--muted);min-width:46px;text-align:right;font-variant-numeric:tabular-nums}
+.row input[type=range]{flex:1;accent-color:var(--accent-2)}
+.switch{position:relative;width:51px;height:31px;flex:0 0 auto}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.switch i{position:absolute;inset:0;border-radius:999px;background:var(--surface-2);transition:.2s}
+.switch i::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;transition:.2s}
+.switch input:checked + i{background:#30d158}
+.switch input:checked + i::after{transform:translateX(20px)}
+#review video{width:100%;max-height:50vh;border-radius:12px;background:#000;display:block;margin-bottom:12px}
+.btns{display:flex;flex-direction:column;gap:10px}
+.btns .pill{padding:14px;text-align:center;font-size:17px}
+.note{color:var(--muted);font-size:13px;margin:10px 0 0;text-align:center}
+
+#count{position:absolute;inset:0;display:none;place-items:center;font-size:140px;font-weight:800;
+  color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.6);pointer-events:none;z-index:15}
+#count.on{display:grid}
+#msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(86%,360px);text-align:center;
+  background:rgba(23,23,29,.95);padding:20px;border-radius:16px;display:none;z-index:30}
+#msg.on{display:block}
+#msg p{margin:0 0 14px}
+</style>
+</head>
+<body>
+
+<!-- ============ ACCUEIL ============ -->
+<section id="home" class="screen active">
+  <div class="topbar">
+    <h1>Prompteur</h1>
+    <button class="pill" id="newBtn">+ Nouveau</button>
+  </div>
+  <div class="list" id="list"></div>
+</section>
+
+<!-- ============ ÉDITEUR ============ -->
+<section id="editor" class="screen">
+  <div class="topbar">
+    <button class="pill ghost" id="backBtn">‹ Scripts</button>
+    <button class="pill red" id="goBtn">Lancer ▶</button>
+  </div>
+  <div class="editor-body">
+    <input id="title" placeholder="Titre" autocomplete="off">
+    <textarea id="body" placeholder="Colle ou écris ton texte ici…"></textarea>
+  </div>
+  <div class="editor-foot">
+    <button class="danger" id="delBtn">Supprimer</button>
+    <span class="meta" id="meta"></span>
+  </div>
+</section>
+
+<!-- ============ STUDIO ============ -->
+<section id="studio" class="screen">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="panelBg"></div>
+  <div id="panel"><div id="scroller"></div><div id="guide"></div></div>
+  <div id="hud"><i></i><span id="time">00:00</span></div>
+  <div id="count"></div>
+
+  <div class="bar">
+    <div class="group">
+      <button class="ctl hide-rec" id="closeBtn" aria-label="Fermer">✕</button>
+      <button class="ctl hide-rec" id="setBtn" aria-label="Réglages">
+        <svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+      </button>
+    </div>
+    <button id="rec" aria-label="Enregistrer"><span></span></button>
+    <div class="group">
+      <button class="ctl" id="slower" aria-label="Moins vite">−</button>
+      <div class="speed"><b id="speedVal">5</b><small>vitesse</small></div>
+      <button class="ctl" id="faster" aria-label="Plus vite">+</button>
+    </div>
+  </div>
+
+  <div class="sheet" id="settings">
+    <div class="grab"></div>
+    <h2>Réglages <button class="pill ghost" id="setDone">OK</button></h2>
+    <div class="row"><label>Taille du texte</label><input type="range" id="sFont" min="20" max="80" step="1"><output id="oFont"></output></div>
+    <div class="row"><label>Vitesse</label><input type="range" id="sSpeed" min="1" max="20" step="1"><output id="oSpeed"></output></div>
+    <div class="row"><label>Hauteur zone texte</label><input type="range" id="sHeight" min="20" max="100" step="5"><output id="oHeight"></output></div>
+    <div class="row"><label>Fond du texte</label><input type="range" id="sOpacity" min="0" max="100" step="5"><output id="oOpacity"></output></div>
+    <div class="row"><label>Caméra</label><label class="switch"><input type="checkbox" id="sCam"><i></i></label></div>
+    <div class="row"><label>Caméra arrière</label><label class="switch"><input type="checkbox" id="sBack"><i></i></label></div>
+    <div class="row"><label>Compte à rebours 3 s</label><label class="switch"><input type="checkbox" id="sCount"><i></i></label></div>
+    <div class="row"><label>Texte en miroir</label><label class="switch"><input type="checkbox" id="sMirror"><i></i></label></div>
+    <div class="row"><button class="pill ghost" id="restart" style="width:100%">↺ Revenir au début du texte</button></div>
+  </div>
+
+  <div class="sheet" id="review">
+    <div class="grab"></div>
+    <h2>Ta prise <span id="revInfo" style="color:var(--muted);font-weight:400;font-size:14px"></span></h2>
+    <video id="revVideo" playsinline controls></video>
+    <div class="btns">
+      <button class="pill" id="saveBtn">Enregistrer dans Photos</button>
+      <button class="pill ghost" id="retakeBtn">Supprimer et refaire</button>
+    </div>
+    <p class="note">Dans le menu qui s'ouvre, choisis « Enregistrer la vidéo ».</p>
+  </div>
+
+  <div id="msg"><p id="msgText"></p><button class="pill" id="msgOk">OK</button></div>
+</section>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* ---------- Stockage ---------- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+};
+let scripts = store.get('pr.scripts', []);
+const defaults = { font:38, speed:5, height:45, opacity:55, cam:true, back:false, count:true, mirror:false };
+const cfg = Object.assign({}, defaults, store.get('pr.cfg', {}));
+const saveCfg = () => store.set('pr.cfg', cfg);
+const saveScripts = () => store.set('pr.scripts', scripts);
+
+/* ---------- Navigation ---------- */
+function show(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+}
+
+/* ---------- Accueil ---------- */
+const fmtDate = t => new Date(t).toLocaleDateString('fr-FR', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+function renderList(){
+  const list = $('list');
+  list.textContent = '';
+  if (!scripts.length){
+    const p = document.createElement('p');
+    p.className = 'empty';
+    p.textContent = 'Aucun script pour l\'instant. Appuie sur « + Nouveau » pour coller ton premier texte.';
+    list.append(p);
+    return;
+  }
+  [...scripts].sort((a, b) => b.updated - a.updated).forEach(s => {
+    const c = document.createElement('button');
+    c.className = 'card';
+    const b = document.createElement('b'); b.textContent = s.title || 'Sans titre';
+    const sp = document.createElement('span'); sp.textContent = s.body.slice(0, 200) || '—';
+    const sm = document.createElement('small'); sm.textContent = fmtDate(s.updated) + ' · ' + readTime(s.body);
+    c.append(b, sp, sm);
+    c.onclick = () => openEditor(s.id);
+    list.append(c);
+  });
+}
+function readTime(text){
+  const words = (text.trim().match(/\S+/g) || []).length;
+  const sec = Math.round(words / 150 * 60);  // ~150 mots/min à l'oral
+  return words + ' mots · ~' + (sec < 60 ? sec + ' s' : Math.round(sec / 60) + ' min');
+}
+
+/* ---------- Éditeur ---------- */
+let current = null;
+function openEditor(id){
+  current = scripts.find(s => s.id === id);
+  $('title').value = current.title;
+  $('body').value = current.body;
+  $('meta').textContent = readTime(current.body);
+  show('editor');
+}
+function persistEditor(){
+  if (!current) return;
+  current.title = $('title').value.trim();
+  current.body = $('body').value;
+  current.updated = Date.now();
+  saveScripts();
+  $('meta').textContent = readTime(current.body);
+}
+$('newBtn').onclick = () => {
+  const s = { id: Date.now().toString(36), title:'', body:'', updated: Date.now() };
+  scripts.push(s); saveScripts();
+  openEditor(s.id);
+  setTimeout(() => $('body').focus(), 50);
+};
+$('title').oninput = $('body').oninput = persistEditor;
+$('backBtn').onclick = () => {
+  persistEditor();
+  if (current && !current.title && !current.body.trim()){
+    scripts = scripts.filter(s => s !== current); saveScripts();
+  }
+  current = null; renderList(); show('home');
+};
+$('delBtn').onclick = () => {
+  if (!confirm('Supprimer ce script ?')) return;
+  scripts = scripts.filter(s => s !== current); saveScripts();
+  current = null; renderList(); show('home');
+};
+$('goBtn').onclick = () => {
+  persistEditor();
+  if (!current.body.trim()){ $('body').focus(); return; }
+  document.activeElement.blur();
+  openStudio();
+};
+
+/* ---------- Studio : défilement ---------- */
+const panel = $('panel'), scroller = $('scroller'), panelBg = $('panelBg');
+let pos = 0, playing = false, lastT = 0, guideY = 0;
+const pxPerSec = () => cfg.speed * 9 + 6;
+
+function layout(){
+  const h = window.innerHeight * cfg.height / 100;
+  panel.style.height = panelBg.style.height = h + 'px';
+  panelBg.style.background = 'rgba(0,0,0,' + (cfg.opacity / 100) + ')';
+  scroller.style.fontSize = cfg.font + 'px';
+  scroller.style.transform = '';
+  // Ligne de lecture vers le haut de la zone, près de l'objectif
+  const top = parseFloat(getComputedStyle(panel).paddingTop) || 0;
+  guideY = top + Math.max(cfg.font * 1.2, (h - top) * 0.28);
+  $('guide').style.top = (guideY - 9 + cfg.font * 0.68) + 'px';
+  $('speedVal').textContent = cfg.speed;
+  render();
+}
+function render(){
+  const max = scroller.offsetHeight;
+  if (pos > max) pos = max;
+  if (pos < 0) pos = 0;
+  scroller.style.transform = 'translateY(' + (guideY - pos) + 'px)' + (cfg.mirror ? ' scaleX(-1)' : '');
+}
+function tick(t){
+  if (playing){
+    const dt = lastT ? Math.min((t - lastT) / 1000, 0.1) : 0;
+    pos += pxPerSec() * dt;
+    if (pos >= scroller.offsetHeight){ pos = scroller.offsetHeight; playing = false; }
+    render();
+  }
+  lastT = t;
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// Toucher la zone texte = pause/lecture ; glisser = avancer/reculer
+let drag = null;
+panel.addEventListener('pointerdown', e => {
+  drag = { y: e.clientY, pos, moved: false, wasPlaying: playing };
+  panel.setPointerCapture(e.pointerId);
+});
+panel.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dy = e.clientY - drag.y;
+  if (Math.abs(dy) > 8) drag.moved = true;
+  if (drag.moved){ playing = false; pos = drag.pos - dy; render(); }
+});
+panel.addEventListener('pointerup', () => {
+  if (!drag) return;
+  if (!drag.moved) playing = !drag.wasPlaying;
+  else playing = drag.wasPlaying;
+  drag = null;
+});
+panel.addEventListener('pointercancel', () => { drag = null; });
+
+function setSpeed(v){
+  cfg.speed = Math.max(1, Math.min(20, v)); saveCfg();
+  $('speedVal').textContent = cfg.speed;
+  $('sSpeed').value = cfg.speed; $('oSpeed').textContent = cfg.speed;
+}
+$('slower').onclick = () => setSpeed(cfg.speed - 1);
+$('faster').onclick = () => setSpeed(cfg.speed + 1);
+
+/* ---------- Studio : caméra ---------- */
+const cam = $('cam');
+let stream = null, wakeLock = null;
+
+async function startCamera(){
+  stopCamera();
+  cam.classList.toggle('mirror', !cfg.back);
+  if (!cfg.cam){ cam.srcObject = null; return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    message('La caméra n\'est pas disponible ici. Ouvre l\'app depuis son adresse https (pas en fichier local).');
+    return;
+  }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: cfg.back ? 'environment' : 'user', width:{ ideal:1920 }, height:{ ideal:1080 }, frameRate:{ ideal:30 } },
+      audio: { echoCancellation: true, noiseSuppression: true }
+    });
+    cam.srcObject = stream;
+    await cam.play().catch(() => {});
+  }catch(err){
+    message('Accès caméra/micro refusé. Autorise-les dans Réglages › Safari › Caméra et Micro, puis rouvre l\'app.');
+  }
+}
+function stopCamera(){
+  if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
+async function keepAwake(on){
+  try{
+    if (on && 'wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+    else if (!on && wakeLock){ await wakeLock.release(); wakeLock = null; }
+  }catch{}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && $('studio').classList.contains('active')){
+    keepAwake(true);
+    if (cfg.cam && (!stream || stream.getVideoTracks().some(t => t.readyState === 'ended'))) startCamera();
+  }
+});
+
+function openStudio(){
+  scroller.textContent = current.body;
+  pos = 0; playing = false;
+  show('studio');
+  syncSettingsUI();
+  layout();
+  startCamera();
+  keepAwake(true);
+}
+$('closeBtn').onclick = () => {
+  playing = false;
+  stopCamera(); keepAwake(false);
+  closeSheets(); discardTake();
+  show('editor');
+};
+window.addEventListener('resize', () => { if ($('studio').classList.contains('active')) layout(); });
+
+/* ---------- Studio : enregistrement ---------- */
+let recorder = null, chunks = [], recStart = 0, timerId = 0, lastBlob = null, counting = false, saved = false;
+
+function pickMime(){
+  const types = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+  if (!window.MediaRecorder) return null;
+  return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
+$('rec').onclick = () => {
+  if (counting) return;
+  if (recorder && recorder.state === 'recording') stopRecording();
+  else startRecording();
+};
+async function startRecording(){
+  closeSheets();
+  if (!cfg.cam || !stream){
+    message(cfg.cam ? 'La caméra n\'est pas prête.' : 'Active la caméra dans les réglages pour filmer.');
+    return;
+  }
+  const mime = pickMime();
+  if (mime === null){ message('Ton navigateur ne sait pas enregistrer la vidéo.'); return; }
+  if (cfg.count) await countdown();
+  chunks = [];
+  try{
+    recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : undefined);
+  }catch{
+    recorder = new MediaRecorder(stream);
+  }
+  recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = onRecorded;
+  recorder.start(1000);
+  recStart = Date.now();
+  $('studio').classList.add('recording');
+  $('rec').classList.add('on');
+  $('hud').classList.add('on');
+  updateTimer(); timerId = setInterval(updateTimer, 250);
+  playing = true;
+}
+function stopRecording(){
+  playing = false;
+  clearInterval(timerId);
+  $('studio').classList.remove('recording');
+  $('rec').classList.remove('on');
+  $('hud').classList.remove('on');
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+}
+function updateTimer(){
+  const s = Math.floor((Date.now() - recStart) / 1000);
+  $('time').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+function countdown(){
+  counting = true;
+  const el = $('count');
+  return new Promise(res => {
+    let n = 3;
+    el.textContent = n; el.classList.add('on');
+    const id = setInterval(() => {
+      n--;
+      if (n <= 0){ clearInterval(id); el.classList.remove('on'); counting = false; res(); }
+      else el.textContent = n;
+    }, 1000);
+  });
+}
+function onRecorded(){
+  const type = (recorder.mimeType || chunks[0]?.type || 'video/mp4').split(';')[0];
+  lastBlob = new Blob(chunks, { type });
+  chunks = [];
+  const v = $('revVideo');
+  if (v.src) URL.revokeObjectURL(v.src);
+  v.src = URL.createObjectURL(lastBlob);
+  $('revInfo').textContent = $('time').textContent + ' · ' + (lastBlob.size / 1048576).toFixed(1) + ' Mo';
+  saved = false;
+  $('retakeBtn').textContent = 'Supprimer et refaire';
+  $('review').classList.add('open');
+}
+function fileName(){
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const ext = lastBlob.type.includes('webm') ? 'webm' : 'mp4';
+  return 'prompteur-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + '.' + ext;
+}
+$('saveBtn').onclick = async () => {
+  if (!lastBlob) return;
+  const file = new File([lastBlob], fileName(), { type: lastBlob.type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })){
+    try{ await navigator.share({ files: [file] }); markSaved(); }
+    catch(e){ if (e.name !== 'AbortError') message('Partage impossible : ' + e.message); }
+  }else{
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = file.name;
+    document.body.append(a); a.click(); a.remove();
+    markSaved();
+  }
+};
+function markSaved(){ saved = true; $('retakeBtn').textContent = 'Nouvelle prise'; }
+$('retakeBtn').onclick = () => {
+  if (!saved && !confirm('Cette prise n\'est pas enregistrée. La supprimer ?')) return;
+  discardTake();
+  pos = 0; render();
+};
+function discardTake(){
+  const v = $('revVideo');
+  v.pause();
+  if (v.src){ URL.revokeObjectURL(v.src); v.removeAttribute('src'); v.load(); }
+  lastBlob = null;
+  $('review').classList.remove('open');
+}
+
+/* ---------- Réglages ---------- */
+function syncSettingsUI(){
+  $('sFont').value = cfg.font;     $('oFont').textContent = cfg.font;
+  $('sSpeed').value = cfg.speed;   $('oSpeed').textContent = cfg.speed;
+  $('sHeight').value = cfg.height; $('oHeight').textContent = cfg.height + ' %';
+  $('sOpacity').value = cfg.opacity; $('oOpacity').textContent = cfg.opacity + ' %';
+  $('sCam').checked = cfg.cam; $('sBack').checked = cfg.back;
+  $('sCount').checked = cfg.count; $('sMirror').checked = cfg.mirror;
+}
+$('sFont').oninput = e => { cfg.font = +e.target.value; $('oFont').textContent = cfg.font; saveCfg(); layout(); };
+$('sSpeed').oninput = e => setSpeed(+e.target.value);
+$('sHeight').oninput = e => { cfg.height = +e.target.value; $('oHeight').textContent = cfg.height + ' %'; saveCfg(); layout(); };
+$('sOpacity').oninput = e => { cfg.opacity = +e.target.value; $('oOpacity').textContent = cfg.opacity + ' %'; saveCfg(); layout(); };
+$('sCam').onchange = e => { cfg.cam = e.target.checked; saveCfg(); startCamera(); };
+$('sBack').onchange = e => { cfg.back = e.target.checked; saveCfg(); startCamera(); };
+$('sCount').onchange = e => { cfg.count = e.target.checked; saveCfg(); };
+$('sMirror').onchange = e => { cfg.mirror = e.target.checked; saveCfg(); render(); };
+$('restart').onclick = () => { playing = false; pos = 0; render(); closeSheets(); };
+$('setBtn').onclick = () => $('settings').classList.add('open');
+$('setDone').onclick = closeSheets;
+function closeSheets(){ $('settings').classList.remove('open'); }
+
+function message(text){ $('msgText').textContent = text; $('msg').classList.add('on'); }
+$('msgOk').onclick = () => $('msg').classList.remove('on');
+
+/* ---------- Démarrage ---------- */
+renderList();
+if ('serviceWorker' in navigator && location.protocol === 'https:'){
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+})();
+</script>
+</body>
+</html>
