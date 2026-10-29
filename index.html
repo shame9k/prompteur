@@ -65,7 +65,14 @@ input,textarea{font:inherit;color:inherit}
   padding:0 calc(var(--safe-r) + 22px) 0 calc(var(--safe-l) + 22px);
   white-space:pre-wrap;word-wrap:break-word;text-align:center;font-weight:600;line-height:1.35;
   text-shadow:0 1px 3px rgba(0,0,0,.6)}
-#scroller.flip{transform-origin:center}
+/* En paysage : colonne de texte plus étroite pour que les yeux bougent moins */
+#studio.land #scroller{padding-left:calc(var(--safe-l) + 14%);padding-right:calc(var(--safe-r) + 14%)}
+#studio.land #hud{bottom:calc(var(--safe-b) + 100px)}
+#studio.land .bar{padding-top:8px;padding-bottom:calc(var(--safe-b) + 8px)}
+#studio.land #rec{width:62px;height:62px}
+#studio.land #rec span{width:46px;height:46px}
+#studio.land #rec.on span{width:24px;height:24px}
+#studio.land .sheet{max-height:92%}
 #guide{position:absolute;left:calc(var(--safe-l) + 4px);width:0;height:0;pointer-events:none;
   border-top:9px solid transparent;border-bottom:9px solid transparent;border-left:12px solid var(--accent);opacity:.9}
 #hud{position:absolute;left:50%;transform:translateX(-50%);
@@ -184,6 +191,7 @@ input,textarea{font:inherit;color:inherit}
     <div class="row"><label>Caméra arrière</label><label class="switch"><input type="checkbox" id="sBack"><i></i></label></div>
     <div class="row"><label>Compte à rebours 3 s</label><label class="switch"><input type="checkbox" id="sCount"><i></i></label></div>
     <div class="row"><label>Texte en miroir</label><label class="switch"><input type="checkbox" id="sMirror"><i></i></label></div>
+    <p class="note" id="landTip" style="text-align:left;margin:4px 0 8px">Pour filmer en paysage : désactive le verrouillage de rotation (Centre de contrôle) et tourne le téléphone. Le texte et la vidéo suivent. Taille et hauteur sont réglées à part pour le paysage.</p>
     <div class="row"><button class="pill ghost" id="restart" style="width:100%">↺ Revenir au début du texte</button></div>
   </div>
 
@@ -212,7 +220,8 @@ const store = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
 };
 let scripts = store.get('pr.scripts', []);
-const defaults = { font:38, speed:5, height:45, opacity:55, cam:true, back:false, count:true, mirror:false };
+// Taille du texte et hauteur de zone sont gardées séparément en portrait et en paysage
+const defaults = { font:38, speed:5, height:45, fontL:34, heightL:70, opacity:55, cam:true, back:false, count:true, mirror:false };
 const cfg = Object.assign({}, defaults, store.get('pr.cfg', {}));
 const saveCfg = () => store.set('pr.cfg', cfg);
 const saveScripts = () => store.set('pr.scripts', scripts);
@@ -298,18 +307,26 @@ $('goBtn').onclick = () => {
 const panel = $('panel'), scroller = $('scroller'), panelBg = $('panelBg');
 let pos = 0, playing = false, lastT = 0, guideY = 0;
 const pxPerSec = () => cfg.speed * 9 + 6;
+const isLand = () => window.innerWidth > window.innerHeight;
+const fontKey = () => isLand() ? 'fontL' : 'font';
+const heightKey = () => isLand() ? 'heightL' : 'height';
 
 function layout(){
-  const h = window.innerHeight * cfg.height / 100;
+  const font = cfg[fontKey()], h = window.innerHeight * cfg[heightKey()] / 100;
+  $('studio').classList.toggle('land', isLand());
   panel.style.height = panelBg.style.height = h + 'px';
   panelBg.style.background = 'rgba(0,0,0,' + (cfg.opacity / 100) + ')';
-  scroller.style.fontSize = cfg.font + 'px';
+  // Garder la position de lecture quand la taille du texte change (rotation)
+  const ratio = scroller.offsetHeight ? pos / scroller.offsetHeight : 0;
+  scroller.style.fontSize = font + 'px';
   scroller.style.transform = '';
+  pos = ratio * scroller.offsetHeight;
   // Ligne de lecture vers le haut de la zone, près de l'objectif
   const top = parseFloat(getComputedStyle(panel).paddingTop) || 0;
-  guideY = top + Math.max(cfg.font * 1.2, (h - top) * 0.28);
-  $('guide').style.top = (guideY - 9 + cfg.font * 0.68) + 'px';
+  guideY = top + Math.max(font * 1.2, (h - top) * 0.28);
+  $('guide').style.top = (guideY - 9 + font * 0.68) + 'px';
   $('speedVal').textContent = cfg.speed;
+  syncSettingsUI();
   render();
 }
 function render(){
@@ -412,7 +429,10 @@ $('closeBtn').onclick = () => {
   closeSheets(); discardTake();
   show('editor');
 };
-window.addEventListener('resize', () => { if ($('studio').classList.contains('active')) layout(); });
+function relayout(){ if ($('studio').classList.contains('active')) layout(); }
+window.addEventListener('resize', relayout);
+// Sur iPhone, les dimensions ne sont pas toujours à jour au moment de la rotation
+window.addEventListener('orientationchange', () => { setTimeout(relayout, 150); setTimeout(relayout, 500); });
 
 /* ---------- Studio : enregistrement ---------- */
 let recorder = null, chunks = [], recStart = 0, timerId = 0, lastBlob = null, counting = false, saved = false;
@@ -523,16 +543,18 @@ function discardTake(){
 
 /* ---------- Réglages ---------- */
 function syncSettingsUI(){
-  $('sFont').value = cfg.font;     $('oFont').textContent = cfg.font;
+  const font = cfg[fontKey()], height = cfg[heightKey()];
+  $('sFont').value = font;         $('oFont').textContent = font;
   $('sSpeed').value = cfg.speed;   $('oSpeed').textContent = cfg.speed;
-  $('sHeight').value = cfg.height; $('oHeight').textContent = cfg.height + ' %';
+  $('sHeight').value = height;     $('oHeight').textContent = height + ' %';
+  $('landTip').hidden = isLand();
   $('sOpacity').value = cfg.opacity; $('oOpacity').textContent = cfg.opacity + ' %';
   $('sCam').checked = cfg.cam; $('sBack').checked = cfg.back;
   $('sCount').checked = cfg.count; $('sMirror').checked = cfg.mirror;
 }
-$('sFont').oninput = e => { cfg.font = +e.target.value; $('oFont').textContent = cfg.font; saveCfg(); layout(); };
+$('sFont').oninput = e => { cfg[fontKey()] = +e.target.value; saveCfg(); layout(); };
 $('sSpeed').oninput = e => setSpeed(+e.target.value);
-$('sHeight').oninput = e => { cfg.height = +e.target.value; $('oHeight').textContent = cfg.height + ' %'; saveCfg(); layout(); };
+$('sHeight').oninput = e => { cfg[heightKey()] = +e.target.value; saveCfg(); layout(); };
 $('sOpacity').oninput = e => { cfg.opacity = +e.target.value; $('oOpacity').textContent = cfg.opacity + ' %'; saveCfg(); layout(); };
 $('sCam').onchange = e => { cfg.cam = e.target.checked; saveCfg(); startCamera(); };
 $('sBack').onchange = e => { cfg.back = e.target.checked; saveCfg(); startCamera(); };
