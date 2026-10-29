@@ -67,6 +67,10 @@ input,textarea{font:inherit;color:inherit}
   text-shadow:0 1px 3px rgba(0,0,0,.6)}
 /* En paysage : colonne de texte plus étroite pour que les yeux bougent moins */
 #studio.land #scroller{padding-left:calc(var(--safe-l) + 14%);padding-right:calc(var(--safe-r) + 14%)}
+/* …et collée du côté de l'objectif pour que le regard paraisse dans la caméra */
+#studio.land.cam-left #scroller{padding-left:calc(var(--safe-l) + 24px);padding-right:42%;text-align:left}
+#studio.land.cam-right #scroller{padding-left:42%;padding-right:calc(var(--safe-r) + 24px);text-align:left}
+#studio.land.cam-right #guide{left:calc(42% - 18px)}
 #studio.land #hud{bottom:calc(var(--safe-b) + 100px)}
 #studio.land .bar{padding-top:8px;padding-bottom:calc(var(--safe-b) + 8px)}
 #studio.land #rec{width:62px;height:62px}
@@ -190,6 +194,7 @@ input,textarea{font:inherit;color:inherit}
     <div class="row"><label>Caméra</label><label class="switch"><input type="checkbox" id="sCam"><i></i></label></div>
     <div class="row"><label>Caméra arrière</label><label class="switch"><input type="checkbox" id="sBack"><i></i></label></div>
     <div class="row"><label>Compte à rebours 3 s</label><label class="switch"><input type="checkbox" id="sCount"><i></i></label></div>
+    <div class="row"><label>Paysage : texte côté caméra</label><label class="switch"><input type="checkbox" id="sNear"><i></i></label></div>
     <div class="row"><label>Texte en miroir</label><label class="switch"><input type="checkbox" id="sMirror"><i></i></label></div>
     <p class="note" id="landTip" style="text-align:left;margin:4px 0 8px">Pour filmer en paysage : désactive le verrouillage de rotation (Centre de contrôle) et tourne le téléphone. Le texte et la vidéo suivent. Taille et hauteur sont réglées à part pour le paysage.</p>
     <div class="row"><button class="pill ghost" id="restart" style="width:100%">↺ Revenir au début du texte</button></div>
@@ -221,7 +226,7 @@ const store = {
 };
 let scripts = store.get('pr.scripts', []);
 // Taille du texte et hauteur de zone sont gardées séparément en portrait et en paysage
-const defaults = { font:38, speed:5, height:45, fontL:34, heightL:70, opacity:55, cam:true, back:false, count:true, mirror:false };
+const defaults = { font:38, speed:5, height:45, fontL:34, heightL:70, opacity:55, cam:true, back:false, count:true, mirror:false, nearCam:true };
 const cfg = Object.assign({}, defaults, store.get('pr.cfg', {}));
 const saveCfg = () => store.set('pr.cfg', cfg);
 const saveScripts = () => store.set('pr.scripts', scripts);
@@ -310,10 +315,19 @@ const pxPerSec = () => cfg.speed * 9 + 6;
 const isLand = () => window.innerWidth > window.innerHeight;
 const fontKey = () => isLand() ? 'fontL' : 'font';
 const heightKey = () => isLand() ? 'heightL' : 'height';
+// Côté de l'objectif frontal en paysage : 90 = haut du téléphone tourné vers la gauche
+function camSide(){
+  const a = typeof window.orientation === 'number' ? window.orientation
+          : (screen.orientation ? screen.orientation.angle : 90);
+  return (a === -90 || a === 270) ? 'right' : 'left';
+}
 
 function layout(){
   const font = cfg[fontKey()], h = window.innerHeight * cfg[heightKey()] / 100;
+  const side = isLand() && cfg.nearCam && !cfg.back ? camSide() : '';
   $('studio').classList.toggle('land', isLand());
+  $('studio').classList.toggle('cam-left', side === 'left');
+  $('studio').classList.toggle('cam-right', side === 'right');
   panel.style.height = panelBg.style.height = h + 'px';
   panelBg.style.background = 'rgba(0,0,0,' + (cfg.opacity / 100) + ')';
   // Garder la position de lecture quand la taille du texte change (rotation)
@@ -551,6 +565,7 @@ function syncSettingsUI(){
   $('sOpacity').value = cfg.opacity; $('oOpacity').textContent = cfg.opacity + ' %';
   $('sCam').checked = cfg.cam; $('sBack').checked = cfg.back;
   $('sCount').checked = cfg.count; $('sMirror').checked = cfg.mirror;
+  $('sNear').checked = cfg.nearCam;
 }
 $('sFont').oninput = e => { cfg[fontKey()] = +e.target.value; saveCfg(); layout(); };
 $('sSpeed').oninput = e => setSpeed(+e.target.value);
@@ -560,6 +575,7 @@ $('sCam').onchange = e => { cfg.cam = e.target.checked; saveCfg(); startCamera()
 $('sBack').onchange = e => { cfg.back = e.target.checked; saveCfg(); startCamera(); };
 $('sCount').onchange = e => { cfg.count = e.target.checked; saveCfg(); };
 $('sMirror').onchange = e => { cfg.mirror = e.target.checked; saveCfg(); render(); };
+$('sNear').onchange = e => { cfg.nearCam = e.target.checked; saveCfg(); layout(); };
 $('restart').onclick = () => { playing = false; pos = 0; render(); closeSheets(); };
 $('setBtn').onclick = () => $('settings').classList.add('open');
 $('setDone').onclick = closeSheets;
