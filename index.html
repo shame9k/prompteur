@@ -195,6 +195,7 @@ input,textarea{font:inherit;color:inherit}
     <div class="row"><label>Caméra arrière</label><label class="switch"><input type="checkbox" id="sBack"><i></i></label></div>
     <div class="row"><label>Compte à rebours 3 s</label><label class="switch"><input type="checkbox" id="sCount"><i></i></label></div>
     <div class="row"><label>Paysage : texte côté caméra</label><label class="switch"><input type="checkbox" id="sNear"><i></i></label></div>
+    <div class="row"><label>Réduction de bruit<br><small style="color:var(--muted)">Pour les lieux bruyants, voix moins naturelle</small></label><label class="switch"><input type="checkbox" id="sDenoise"><i></i></label></div>
     <div class="row"><label>Texte en miroir</label><label class="switch"><input type="checkbox" id="sMirror"><i></i></label></div>
     <p class="note" id="landTip" style="text-align:left;margin:4px 0 8px">Pour filmer en paysage : désactive le verrouillage de rotation (Centre de contrôle) et tourne le téléphone. Le texte et la vidéo suivent. Taille et hauteur sont réglées à part pour le paysage.</p>
     <div class="row"><button class="pill ghost" id="restart" style="width:100%">↺ Revenir au début du texte</button></div>
@@ -226,7 +227,7 @@ const store = {
 };
 let scripts = store.get('pr.scripts', []);
 // Taille du texte et hauteur de zone sont gardées séparément en portrait et en paysage
-const defaults = { font:38, speed:5, height:45, fontL:34, heightL:70, opacity:55, cam:true, back:false, count:true, mirror:false, nearCam:true };
+const defaults = { font:38, speed:5, height:45, fontL:34, heightL:70, opacity:55, cam:true, back:false, count:true, mirror:false, nearCam:true, denoise:false };
 const cfg = Object.assign({}, defaults, store.get('pr.cfg', {}));
 const saveCfg = () => store.set('pr.cfg', cfg);
 const saveScripts = () => store.set('pr.scripts', scripts);
@@ -404,7 +405,11 @@ async function startCamera(){
   try{
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: cfg.back ? 'environment' : 'user', width:{ ideal:1920 }, height:{ ideal:1080 }, frameRate:{ ideal:30 } },
-      audio: { echoCancellation: true, noiseSuppression: true }
+      // Par défaut : son brut, sans le traitement « appel visio » qui écrase la voix
+      audio: {
+        echoCancellation: cfg.denoise, noiseSuppression: cfg.denoise, autoGainControl: cfg.denoise,
+        channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 }
+      }
     });
     cam.srcObject = stream;
     await cam.play().catch(() => {});
@@ -472,7 +477,7 @@ async function startRecording(){
   if (cfg.count) await countdown();
   chunks = [];
   try{
-    recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000 } : undefined);
+    recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 10_000_000, audioBitsPerSecond: 256_000 } : undefined);
   }catch{
     recorder = new MediaRecorder(stream);
   }
@@ -565,6 +570,7 @@ function syncSettingsUI(){
   $('sOpacity').value = cfg.opacity; $('oOpacity').textContent = cfg.opacity + ' %';
   $('sCam').checked = cfg.cam; $('sBack').checked = cfg.back;
   $('sCount').checked = cfg.count; $('sMirror').checked = cfg.mirror;
+  $('sDenoise').checked = cfg.denoise;
   $('sNear').checked = cfg.nearCam;
 }
 $('sFont').oninput = e => { cfg[fontKey()] = +e.target.value; saveCfg(); layout(); };
@@ -575,6 +581,7 @@ $('sCam').onchange = e => { cfg.cam = e.target.checked; saveCfg(); startCamera()
 $('sBack').onchange = e => { cfg.back = e.target.checked; saveCfg(); startCamera(); };
 $('sCount').onchange = e => { cfg.count = e.target.checked; saveCfg(); };
 $('sMirror').onchange = e => { cfg.mirror = e.target.checked; saveCfg(); render(); };
+$('sDenoise').onchange = e => { cfg.denoise = e.target.checked; saveCfg(); startCamera(); };
 $('sNear').onchange = e => { cfg.nearCam = e.target.checked; saveCfg(); layout(); };
 $('restart').onclick = () => { playing = false; pos = 0; render(); closeSheets(); };
 $('setBtn').onclick = () => $('settings').classList.add('open');

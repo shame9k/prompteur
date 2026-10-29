@@ -1,5 +1,5 @@
 // Cache de l'app pour qu'elle marche hors connexion. Change VERSION à chaque mise à jour.
-const VERSION = 'prompteur-v3';
+const VERSION = 'prompteur-v4';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-180.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
